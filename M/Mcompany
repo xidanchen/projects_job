@@ -1,0 +1,294 @@
+setwd("C:/Users/xidan/Desktop/Amber")
+------------------------- error-----------------------
+# require(xlsx)
+#data <- read.xlsx("Amber_Training.xlsx")
+#cannot load package rJava === check win10
+
+
+--------------------------- EDA -------------------------------------------
+data <- read.csv("Amber_Training.csv", header = TRUE)
+
+---------------------------distribution-------------------------
+summary(data)
+       V1              V2               V3               V4              V5              V6       
+ Min.   :102.0   Min.   :  0.00   Min.   :  0.00   Min.   :121.8   Min.   :    0   Min.   : 15.0  
+ 1st Qu.:212.1   1st Qu.:  0.00   1st Qu.:  0.00   1st Qu.:162.0   1st Qu.:26244   1st Qu.: 99.0  
+ Median :277.1   Median : 19.00   Median :  0.00   Median :184.0   Median :33856   Median :175.0  
+ Mean   :292.4   Mean   : 67.99   Mean   : 47.87   Mean   :179.8   Mean   :32781   Mean   :176.2  
+ 3rd Qu.:374.0   3rd Qu.:129.80   3rd Qu.:117.50   3rd Qu.:192.0   3rd Qu.:36864   3rd Qu.:257.0  
+ Max.   :540.0   Max.   :359.40   Max.   :174.70   Max.   :228.0   Max.   :51984   Max.   :333.0  
+ NA's   :2       NA's   :3                         NA's   :1                                      
+       V7               V8               V9             V10             V11         Outcome     
+ Min.   : 0.000   Min.   : 801.0   Min.   :594.0   Min.   :-99999.00   GA :320   Min.   : 2.33  
+ 1st Qu.: 0.000   1st Qu.: 938.0   1st Qu.:746.6   1st Qu.:     7.00   GLM:479   1st Qu.:23.23  
+ Median : 5.300   Median : 974.0   Median :780.7   Median :    28.00             Median :35.34  
+ Mean   : 5.703   Mean   : 985.5   Mean   :778.6   Mean   :   -76.02             Mean   :36.65  
+ 3rd Qu.:10.200   3rd Qu.:1046.9   3rd Qu.:839.2   3rd Qu.:    56.00             3rd Qu.:48.91  
+ Max.   :32.200   Max.   :1145.0   Max.   :992.6   Max.   :   365.00             Max.   :82.60  
+ NA's   :1        NA's   :2        NA's   :2       NA's   :2    
+
+
+
+hist(data$Outcome)
+boxplot(data$Outcome)
+str(data)
+
+#v2, v3 left skewed
+
+#v5 outlier 0 
+#data[data$V5 == 0, ]
+       V1 V2   V3 V4 V5  V6  V7    V8  V9 V10 V11 Outcome
+300 290.4  0 96.2 NA  0 298 9.4 961.2 865   3 GLM    22.5
+
+#v7 skewed, 2 outlier value
+#sort(data$V7) -- 5 of 28.2, 32.2
+
+#V10 5 outlier, 1 extrem value
+data[data$V10 == -99999.00, ]
+        V1   V2 V3  V4    V5  V6 V7  V8  V9    V10  V11 Outcome
+13   427.5 47.5  0 228 51984 171  0 932 594 -99999  GLM   43.01
+NA      NA   NA NA  NA    NA  NA NA  NA  NA     NA <NA>      NA
+NA.1    NA   NA NA  NA    NA  NA NA  NA  NA     NA <NA>      NA
+
+------------------ check missing pattern ------------------------------
+> data[is.na(data$V1),]
+    V1    V2   V3    V4       V5  V6  V7   V8    V9 V10 V11 Outcome
+36  NA 237.5  0.0 228.0 51984.00 277 0.0  932 594.0 270 GLM   38.41
+236 NA  98.1 24.5 181.7 33014.89  19 6.7 1066 785.5  14 GLM   17.84
+
+> data[is.na(data$V2),]
+       V1 V2    V3    V4       V5  V6   V7     V8    V9 V10 V11 Outcome
+77  469.0 NA   0.0 137.8 18988.84 284 32.2  852.1 840.5   3 GLM   40.20
+351 213.5 NA 174.2 154.6 23901.16 218 11.7 1052.3 775.5  14 GLM   33.70
+508 424.0 NA 132.0 178.0 31684.00 301  8.5  822.0 750.0  28 GLM   62.05
+
+> data[is.na(data$V4),]
+       V1 V2   V3 V4 V5  V6  V7    V8  V9 V10 V11 Outcome
+300 290.4  0 96.2 NA  0 298 9.4 961.2 865   3 GLM    22.5
+
+> data[is.na(data$V7),]
+     V1 V2  V3  V4    V5  V6 V7  V8  V9 V10 V11 Outcome
+504 491 26 123 210 44100 273 NA 882 699  56  GA   59.59
+
+> data[is.na(data$V8),]
+       V1  V2 V3    V4       V5  V6   V7 V8    V9 V10 V11 Outcome
+135 362.6 189  0 164.9 27192.01 129 11.6 NA 755.8  28 GLM   71.30
+498 355.0  19 97 145.0 21025.00 219 13.1 NA 871.0  28  GA   44.03
+
+> data[is.na(data$V9),]
+       V1    V2 V3    V4       V5  V6   V7    V8 V9 V10 V11 Outcome
+174 318.8 212.5  0 155.7 24242.49 114 14.3 852.1 NA  91 GLM   68.10
+475 446.0  24.0 79 162.0 26244.00  60 10.3 967.0 NA  28 GLM   53.39
+
+> data[is.na(data$V10),]
+       V1   V2    V3    V4       V5  V6  V7     V8    V9 V10 V11 Outcome
+228 168.0 42.1 163.8 121.8 14835.24  32 5.7 1058.7 780.1  NA GLM   32.85
+425 173.5 50.1 173.5 164.8 27159.04 277 6.5 1006.2 793.5  NA GLM   33.01
+
+
+----------------------------------------correlation---------------------------------
+#recode 2 extrem value to NA
+data$V5[data$V5 == 0] <- NA
+data$V10[data$V10 == -99999] <- NA
+
+
+library(corrplot)
+cor.data <- data[, -11]
+Pearson <- cor(cor.data, use="pairwise.complete.obs", method="pearson")
+
+write.csv(Pearson, "pearson.csv")
+
+#plot correlation matrix, V1, V7, V10 having a high correlaiton with outcome
+corrplot(Pearson, method = "circle")
+
+#plot V11 and outcome # no group difference
+ggplot(data, aes(x=V11, y=Outcome)) +geom_boxplot()
+
+--------------------------------------regression----------------------------------------
+#use V1, V7, V10 as predictors, check correlation plot, no high covariance between these 3 predictors
+fit <- lm(Outcome~V1+V7+V10,data=data)
+summary(fit)
+confint(fit)
+
+
+> fit <- lm(Outcome~V1+V7+V10,data=data)
+> summary(fit)
+
+Call:
+lm(formula = Outcome ~ V1 + V7 + V10, data = data)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-35.794  -8.347  -0.774   7.430  45.776 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)    
+(Intercept) 7.285315   1.352400   5.387 9.47e-08 ***
+V1          0.057790   0.004415  13.090  < 2e-16 ***
+V7          1.282375   0.073545  17.437  < 2e-16 ***
+V10         0.104258   0.006542  15.937  < 2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 12.37 on 789 degrees of freedom
+  (6 observations deleted due to missingness)
+Multiple R-squared:  0.5116,	Adjusted R-squared:  0.5097 
+F-statistic: 275.5 on 3 and 789 DF,  p-value: < 2.2e-16
+
+> confint(fit)
+                 2.5 %     97.5 %
+(Intercept) 4.63058726 9.94004344
+V1          0.04912336 0.06645595
+V7          1.13800785 1.42674217
+V10         0.09141682 0.11709983
+
+--------------------------------------------diagnostic----------------------------------------------
+outlierTest(fit)
+
+No Studentized residuals with Bonferonni p < 0.05
+Largest |rstudent|:
+    rstudent unadjusted p-value Bonferonni p
+382  3.73358         0.00020236      0.16047
+
+#normalization
+> qqPlot(fit, main="QQ Plot")
+> leveragePlots(fit)
+
+
+
+
+
+
+
+
+
+
+
+
+
+------------------------------including V4 V5 ----------------------------------------------------
+v4 and v5 having a moderate correlation with outcome, also include them in regression model
+Call:
+lm(formula = Outcome ~ V1 + V7 + V10 + V4 + V5, data = data)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-37.140  -8.237  -0.715   7.742  41.615 
+
+Coefficients:
+              Estimate Std. Error t value Pr(>|t|)    
+(Intercept) 15.3266649 26.7604377   0.573    0.567    
+V1           0.0616293  0.0044639  13.806  < 2e-16 ***
+V7           0.9259594  0.1226654   7.549 1.22e-13 ***
+V10          0.1138944  0.0070666  16.117  < 2e-16 ***
+V4           0.0540211  0.2812358   0.192    0.848    
+V5          -0.0005275  0.0007507  -0.703    0.482    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 12.24 on 786 degrees of freedom
+  (7 observations deleted due to missingness)
+Multiple R-squared:  0.5233,	Adjusted R-squared:  0.5202 
+F-statistic: 172.5 on 5 and 786 DF,  p-value: < 2.2e-16
+
+> confint(fit)
+                    2.5 %       97.5 %
+(Intercept) -37.203718740 67.857048499
+V1            0.052866632  0.070391962
+V7            0.685168839  1.166749962
+V10           0.100022697  0.127766098
+V4           -0.498041080  0.606083244
+V5           -0.002001099  0.000946132
+
+-----------------------------------------colinearity: V4 and V5 and V7----------------------------------------------
+---------------------------------------------------------v4
+Call:
+lm(formula = Outcome ~ V1 + V7 + V10 + V4, data = data)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-36.609  -8.329  -0.620   7.493  40.986 
+
+Coefficients:
+             Estimate Std. Error t value Pr(>|t|)    
+(Intercept) 33.598235   6.317221   5.319 1.36e-07 ***
+V1           0.061381   0.004449  13.798  < 2e-16 ***
+V7           0.898310   0.116145   7.734 3.18e-14 ***
+V10          0.112459   0.006763  16.629  < 2e-16 ***
+V4          -0.142192   0.033392  -4.258 2.31e-05 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 12.24 on 787 degrees of freedom
+  (7 observations deleted due to missingness)
+Multiple R-squared:  0.523,	Adjusted R-squared:  0.5205 
+F-statistic: 215.7 on 4 and 787 DF,  p-value: < 2.2e-16
+
+> confint(fit)
+                  2.5 %      97.5 %
+(Intercept) 21.19763877 45.99883065
+V1           0.05264888  0.07011369
+V7           0.67031900  1.12630111
+V10          0.09918380  0.12573363
+V4          -0.20773951 -0.07664430
+
+--------------------------------------------------v5
+Call:
+lm(formula = Outcome ~ V1 + V7 + V10 + V5, data = data)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-37.011  -8.317  -0.687   7.689  41.419 
+
+Coefficients:
+              Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  2.043e+01  3.323e+00   6.147 1.25e-09 ***
+V1           6.158e-02  4.454e-03  13.825  < 2e-16 ***
+V7           9.164e-01  1.120e-01   8.181 1.13e-15 ***
+V10          1.135e-01  6.830e-03  16.624  < 2e-16 ***
+V5          -3.843e-04  8.911e-05  -4.313 1.82e-05 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 12.23 on 787 degrees of freedom
+  (7 observations deleted due to missingness)
+Multiple R-squared:  0.5232,	Adjusted R-squared:  0.5208 
+F-statistic: 215.9 on 4 and 787 DF,  p-value: < 2.2e-16
+
+> confint(fit)
+                    2.5 %        97.5 %
+(Intercept) 13.9042702812 26.9499350372
+V1           0.0528377604  0.0703249084
+V7           0.6964934187  1.1362832351
+V10          0.1001413715  0.1269575351
+V5          -0.0005592211 -0.0002093912
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+---------------------------------------- check if there are nonlinear relationships -----------------------------
+library(car)
+scatterplot(data$V1, data$Outcome)
+
+
+
+
+
+
+
+
+
+
+
