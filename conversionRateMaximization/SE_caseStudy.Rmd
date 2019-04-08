@@ -1,0 +1,464 @@
+---
+title: "SE case study"
+author: "xidan chen"
+date: "`r format(Sys.time(), '%d-%B-%Y %Z')`"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+  word_document:
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+
+# 1. Objective 
+
+The dataset contains several different interaction types per deal (product) along with the number of unique participants and deal properties. 
+ 
+Develop an algorithm to optimize for the conversion rate. Your algorithm should provide a ranking of all deals regardless of whether or not an actual order occurred.
+
+**note: given what we have here, we are interested in what deal property information is useful in order to build recommendations that would maximize the conversion rate. **
+
+# 2. Importing necessary packages
+```{r, results='hide', message=FALSE, warning=FALSE}
+
+
+#for data manipulation and tidying
+library(dplyr)
+library(mice)
+#library(naniar)
+
+#for data visualization
+library(ggplot2)
+library(GGally)
+
+
+
+#for analysis
+#library(psych)
+#library(pscl)
+library(MASS)
+
+```
+
+
+# 3. Importing data
+```{r}
+
+data <- read.csv("dataset_case_data_science_2019.csv", header = TRUE, sep = ",")
+
+
+```
+# 4. Data preparation
+Some notes about specific dataset fields:   
+● Sale_id: unique deal identifier ---should be DEAL_ID  
+● Deal Start: deal activation date   
+● Deal End: deal deactivation date    
+● Has_tag_<X> - human added labels, where values are yes (=1) or no (=0) and indicate if the label is present or not   
+● Show_price: yes (=1) or no (=0)   
+● Unique_visitors_bookings: how many visitors booked a deal   
+● Unique_visitors_deal_pageview: how many visitors interacted with deal’s page   
+● Unique_visitors_book_form: how many visitors interacted with deal’s booking for  
+
+conversion rate, defined as the number of bookings (field: unique_visitors_bookings) divided by the number of unique pageview visitors (field: unique_visitors_deal_pageview)
+
+conversion = UNIQUE_VISITORS_BOOKINGS/UNIQUE_VISITORS_DEAL_PAGEVIEW
+
+## data structure
+```{r}
+
+head(data, 10)
+
+names(data)
+str(data)
+#summary(data)
+
+
+
+```
+## preprocessing: check duplicate, missingness, consistency  
+1. convert variables start with HAS_TAG_X to factors  
+2. no duplicated data was identified  
+3. data is complete  
+4. 7 deals were identified and removed as their deal end time is earlier or equal to the deal start time. These deals' ID are:(86064 84573 65765 89630 86385 88374 84049)       
+5. books and pageview data are consistent  
+6. other categorical data/qualitative data were not checked. Given currently available data, there is no way to cross-validate these data.   
+7. conversion rate is highly skewed, would need further treatment  
+8. reduce categories of variables ROOM_DESCRIPTION 
+9. I am not sure if I can drop redundant informations in has_tag_x variables. For example, HAS_TAG_EUROPE, and DESTINATION_TYPE both include the information europe for the deal. on the other hand has_tag_x could be features on the webpage, not necessariely have to be the deal character. I thus check the counts for both variables and found counts for europe are different which favors the second idea, has_tag_x are features on the webpage. therefore all the has_tag_variables are kept at the preprocessing step.  
+```{r}
+#convert variables start with HAS_TAG_X to factors
+data <- data %>%
+  mutate_at(vars(starts_with("HAS_TAG_")), funs(factor))
+
+
+#check duplicate
+data[duplicated(data)]
+
+#check missing pattern
+md.pattern(data)
+
+#check if time stamps are correct. time difference should be larger than 0 if time stamps are correct.
+data <- data %>%
+  mutate(deal_time = as.numeric(difftime(DEAL_END, DEAL_START)))
+  
+
+boxplot(data$deal_time)
+summary(data$deal_time)
+
+data[data$deal_time <= 0, ]$DEAL_ID #get deal ID for those having incorrect time stamps
+
+#remove 7 deals
+data <- data %>%
+  filter(deal_time > 0)
+
+
+#check if bookings is less than pageview. conversion rate should be between 0 and 1. 
+data <- data %>%
+  mutate(conversion = UNIQUE_VISITORS_BOOKINGS/UNIQUE_VISITORS_DEAL_PAGEVIEW)
+
+boxplot(data$conversion)
+summary(data$conversion)
+#hist(data$conversion)
+
+#recode room_description into categories: rooms, suite, others
+#? is zimmer = rooms???
+table(data$ROOM_DESCRIPTION)
+
+#what is villa/apartment?
+lst <- c(room = "rooms", rooms = "rooms", Zimmer = "rooms", 
+                                suite = "suite", Suite = "suite", 
+                                villa = "villa/apartment", 
+                                apartment = "villa/apartment"
+                             #  villa/apartment = "villa/apartment" 
+                            #    .default = "others"
+         )
+
+#tst <- data
+
+#tst$ROOM_DESCRIPTION <- recode(tst$ROOM_DESCRIPTION, !!!lst, .default = "others")
+#table(tst$ROOM_DESCRIPTION)
+data$ROOM_DESCRIPTION <- recode(data$ROOM_DESCRIPTION, !!!lst, .default = "others")
+#recode BOARD_TYPE?
+#table(data$BOARD_TYPE)
+
+#recode DESTINATION_TYPE?
+#table(data$DESTINATION_TYPE)
+#table(data$HAS_TAG_EUROPE)
+
+data2 <- data
+```
+
+
+
+## select relevant variables
+"SLUG", "TITLE", "DESTINATION_NAME" are redundant information, thus not included in analysis. 
+drop "UNIQUE_VISITORS_DEAL_PAGEVIEW", "UNIQUE_VISITORS_BOOK_FORM", "UNIQUE_VISITORS_BOOKINGS", "DEAL_START", "DEAL_END" information have been included in variables - conversion and deal_time  
+
+come across errors in the final run with original syntax
+```{r}
+
+# sub1 <- data %>%
+#   select_at(-c(SLUG, TITLE, DESTINATION_NAME, UNIQUE_VISITORS_DEAL_PAGEVIEW, UNIQUE_VISITORS_BOOK_FORM, UNIQUE_VISITORS_BOOKINGS, DEAL_START, DEAL_END))
+
+# lst2 <- c("SLUG", "TITLE", "DESTINATION_NAME","UNIQUE_VISITORS_DEAL_PAGEVIEW", "UNIQUE_VISITORS_BOOK_FORM", "UNIQUE_VISITORS_BOOKINGS", "DEAL_START", "DEAL_END")
+
+ sub1 <- data2[, -c(1:3, 5:8)]                 
+                  
+names(data2)           
+   
+#levels(sub1$ROOM_DESCRIPTION)
+
+names(sub1)
+head(sub1)
+str(sub1)
+
+
+
+```
+
+
+# 5. Exploratory
+explore relationship between deal properties and conversion rate.
+the conversion rate is continuous data, I am therefore interested if there are mean-level differences for each deal property.  
+
+
+## tentative visualization
+from the visualization below, we can see, because of the large numbers of zeros, it's not possible to distinguish the mean level differences. 
+```{r, eval=FALSE}
+str(sub1)
+
+#ROOM_DESCRIPTION vs. conversion
+#24 levels
+#'room' having the highest conversion rate
+#boxplot(conversion ~ ROOM_DESCRIPTION, sub1)
+ggplot(sub1, aes(x=ROOM_DESCRIPTION, y=conversion)) + geom_point() +
+  stat_summary(aes(y = conversion,group=1), fun.y=mean, colour="red", geom="line",group=1)
+
+#SHOW_PRICE
+#boxplot(conversion ~ SHOW_PRICE, sub1)
+ggplot(sub1, aes(x=SHOW_PRICE, y=conversion)) + geom_point() +
+  stat_summary(aes(y = conversion,group=1), fun.y=mean, colour="red", geom="line",group=1)
+
+
+#BOARD_TYPE
+boxplot(conversion ~ BOARD_TYPE, sub1)
+
+#DESTINATION_TYPE
+boxplot(conversion ~ DESTINATION_TYPE, sub1)
+
+#TRAVEL_TYPE
+boxplot(conversion ~ TRAVEL_TYPE, sub1)
+
+#TOP_DISCOUNT_GBP
+boxplot(conversion ~ TOP_DISCOUNT_GBP, sub1)
+
+#HAS_TAG_FOOD
+boxplot(conversion ~ HAS_TAG_FOOD, sub1)
+
+#HAS_TAG_RELAXING
+boxplot(conversion ~ HAS_TAG_RELAXING, sub1)
+
+
+
+```
+
+# 6. Split the data into training and test sets
+split data into train (80%) and test (20%)
+
+```{r}
+set.seed(123)
+train <- sub1 %>% sample_frac(.80)
+test <- anti_join(sub1, train, by = 'DEAL_ID')
+
+```
+
+
+# 7. Modeling
+
+## how to treat conversion rate?
+as shown below, conversion rate data have excessive zeros and overdispersed. two possible approaches for the conversion data: 1). zero-inflated regression models 2). dichotomize/binning the conversion rate to two categories 0 and 1, then apply classification methods. 
+```{r}
+ggplot(train, aes(conversion)) + geom_histogram() + geom_density(aes(colour='red')) + ggtitle('train')
+
+ggplot(test, aes(conversion)) + geom_histogram() + geom_density(aes(colour='red')) + ggtitle('test')
+```
+
+
+## Logistic regression
+after the preprocessin, we now have 29 predictors, among which 2 deal_time, top_discount are continuous, others are categorical. perhaps consider feature selection methods?
+
+### data preparation
+
+```{r}
+#recode conversion rate
+train <- train %>%
+  mutate(conversion_c = ifelse(conversion == 0, 0, 1))
+#head(train)
+#table(train$conversion_c)
+
+test <- test %>%
+  mutate(conversion_c = ifelse(conversion == 0, 0, 1))
+
+```
+
+```{r}
+# standardize deal_time
+train$deal_time.scale <- scale(train$deal_time)
+test$deal_time.scale <- scale(test$deal_time)
+sub1$deal_time.scale <- scale(sub1$deal_time)
+#names(train)
+```
+### model1
+**predictor:**  
+"ROOM_DESCRIPTION"
+"SHOW_PRICE"
+"BOARD_TYPE"            
+"DESTINATION_TYPE"
+"TRAVEL_TYPE"
+"TOP_DISCOUNT_GBP"
+"HAS_TAG_FOOD"          
+"HAS_TAG_RELAXING"
+"HAS_TAG_SCENERY"
+"HAS_TAG_FLIGHTS"
+"HAS_TAG_SIGHTSEEING"   
+"HAS_TAG_BEACH"
+"HAS_TAG_ROMANCE"
+"HAS_TAG_EUROPE"
+"HAS_TAG_UKANDIRELAND"  
+"HAS_TAG_BOUTIQUE"
+"HAS_TAG_SHOPPING"
+"HAS_TAG_HISTORICHOTEL"
+"HAS_TAG_COUNTRY"
+"HAS_TAG_ACTIVITIES"
+"HAS_TAG_DRINK"
+"HAS_TAG_HOTEL"
+"HAS_TAG_MODERNINTERIOR"
+"HAS_TAG_MULTIDEST"
+"HAS_TAG_ALLINCLUSIVE"
+"HAS_TAG_LONGHAUL"
+"HAS_TAG_SHORTHAUL"     
+"HAS_TAG_ENTERTAINMENT"
+"deal_time.scale" 
+**outcome:**
+"conversion_c"          
+ 
+```{r}
+glm.fits <- glm(conversion_c ~ ROOM_DESCRIPTION + 
+SHOW_PRICE +
+BOARD_TYPE+
+DESTINATION_TYPE+
+TRAVEL_TYPE+
+TOP_DISCOUNT_GBP+
+HAS_TAG_FOOD+          
+HAS_TAG_RELAXING+
+HAS_TAG_SCENERY+
+HAS_TAG_FLIGHTS+
+HAS_TAG_SIGHTSEEING+   
+HAS_TAG_BEACH+
+HAS_TAG_ROMANCE+
+HAS_TAG_EUROPE+
+HAS_TAG_UKANDIRELAND+  
+HAS_TAG_BOUTIQUE+
+HAS_TAG_SHOPPING+
+HAS_TAG_HISTORICHOTEL+
+HAS_TAG_COUNTRY+
+HAS_TAG_ACTIVITIES+
+HAS_TAG_DRINK+
+HAS_TAG_HOTEL+
+HAS_TAG_MODERNINTERIOR+
+HAS_TAG_MULTIDEST+
+HAS_TAG_ALLINCLUSIVE+
+HAS_TAG_LONGHAUL+
+HAS_TAG_SHORTHAUL+     
+HAS_TAG_ENTERTAINMENT+
+deal_time.scale, 
+                data = train ,family = binomial)
+
+summary(glm.fits)
+
+
+
+
+```
+#### assess accuracy
+accuracy is 70%
+```{r}
+test$glm.probs <- predict(glm.fits, test, type="response")
+#names(test)
+head(test)
+test$pred <- ifelse(test$glm.probs > .50, 1, 0)
+
+table(test$conversion_c, test$pred)
+
+#prediction accuracy
+mean(test$pred == test$conversion_c)
+#error rate
+mean(test$pred != test$conversion_c)
+```
+
+#### conclusion
+DESTINATION_TYPELONG_HAUL(negatively associated), DESTINATION_TYPEUK, TOP_DISCOUNT_GBP(negatively associated) strongly associated with conversion. 
+deal_time is moderatly associated with conversion. 
+HAS_TAG_SHORTHAUL1, HAS_TAG_HISTORICHOTEL1 are also good predictors for conversion.
+note these two predictors HAS_TAG_SIGHTSEEING1, DESTINATION_TYPELONDON are marginally associated with conversion.   
+
+Generally, deals having short haul, destination to UK, expecially to london, include sighseeing and historical hotel are attractive to current customer.   
+The longer a deal be available online, the more conversion it will generate.  
+What is surprising is, top discount is negatively associated with conversion???
+
+
+
+#### output rankings of deals
+```{r}
+sub1$glm.probs <- predict(glm.fits, sub1, type="response")
+
+sub1$rank <- rank(sub1$glm.probs)
+
+# ranking <- sub1 %>%
+#   select(DEAL_ID, rank)
+
+ranking <- sub1[, c("DEAL_ID", "rank")]
+
+head(ranking, 20)
+```
+
+### model2
+only include those significant predictors identified in model1
+
+**outcome:**
+"conversion_c"   
+
+**predictor**
+DESTINATION_TYPE
+TOP_DISCOUNT_GBP 
+deal_time
+HAS_TAG_SHORTHAUL1
+HAS_TAG_HISTORICHOTEL1
+HAS_TAG_SIGHTSEEING1
+
+```{r}
+glm.fits2 <- glm(conversion_c ~ 
+DESTINATION_TYPE+
+TOP_DISCOUNT_GBP+
+HAS_TAG_SIGHTSEEING+   
+HAS_TAG_HISTORICHOTEL+
+HAS_TAG_SHORTHAUL+     
+deal_time.scale, 
+                data = train ,family = binomial)
+
+summary(glm.fits2)
+
+
+
+
+```
+#### assess accuracy
+accuracy is almost the same
+```{r}
+test$glm.probs2 <- predict(glm.fits2, test, type="response")
+#names(test)
+head(test)
+test$pred2 <- ifelse(test$glm.probs2 > .50, 1, 0)
+
+table(test$conversion_c, test$pred2)
+
+#prediction accuracy
+mean(test$pred2 == test$conversion_c)
+#error rate
+mean(test$pred2 != test$conversion_c)
+```
+
+#### output rankings of deals
+```{r}
+sub1$glm.probs2 <- predict(glm.fits2, sub1, type="response")
+
+sub1$rank2 <- rank(sub1$glm.probs2)
+
+# ranking2 <- sub1 %>%
+#   select(DEAL_ID, rank2)
+
+ranking2 <- sub1[, c("DEAL_ID", "rank2")]
+
+
+head(ranking2, 20)
+
+```
+
+# 8. Some final thoughts
+1. try out more classification methods if time allows. Instead of transforming the conversion rate to categorical data, it will be better to treat it as continous data. I would try out zero-inflated model if time allows. 
+
+2. from the logistic regression we can see
++ 2.1 destination to UK, especially to london, deals include sightseeing, historical hotel are popular. company could negotiate more such deals in order to increase sale. On the other hand, this might due to the fact that company's major markert or targeted customers are in uk. The results willl be more informative if we could include the customer data.
+
++ 2.2 besides destination, travel type is also a big factor. It is consistent with the common sense most travelers favor the short distance travel. But why? Is it because the travel is not comfortable, or it's because there are more short haul deals available? And how can company attract more customer favors long haul trip (I am assuming long haul is more profitable). To answer such quesiton would require both customer data and data from airline companies. 
+
+3. while a lot of sales today are now moving to the mobile end, simply having tags about the deals perhaps won't be very helpful for the sale. Models built based on the current webpage data could not be generalized to other perchase device. 
+
+
+
+
+
